@@ -1,6 +1,7 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { AdvancedBlockchainService } from '../services/advanced-blockchain-service.js';
+import { checkBlockQuery, checkLogQuery } from '../utils/enhanced-safety-checks.js';
 
 /**
  * Register transaction and block tools with the MCP server
@@ -207,6 +208,27 @@ export async function handleTransactionTool(
       const includeTransactions = (args?.includeTransactions as boolean) || false;
       const network = (args?.network as 'mainnet' | 'testnet') || 'mainnet';
 
+      // SAFETY CHECK: Block queries with full transactions
+      const safetyCheck = checkBlockQuery(
+        'eth_getBlockByNumber',
+        [blockNumber, includeTransactions]
+      );
+      
+      if (!safetyCheck.safe) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `⛔ UNSAFE BLOCK QUERY BLOCKED\n\n` +
+                    `Reason: ${safetyCheck.reason}\n\n` +
+                    `Suggestion: ${safetyCheck.suggestion}\n\n` +
+                    `This protection prevents session crashes from large responses.`,
+            },
+          ],
+          isError: true,
+        };
+      }
+
       const result = await advancedBlockchain.getBlockDetails(
         blockchain,
         blockNumber,
@@ -229,6 +251,24 @@ export async function handleTransactionTool(
       const blockchain = args?.blockchain as string;
       const filter = args?.filter as any;
       const network = (args?.network as 'mainnet' | 'testnet') || 'mainnet';
+
+      // SAFETY CHECK: Validate log query
+      const safetyCheck = checkLogQuery([filter]);
+      
+      if (!safetyCheck.safe) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `⛔ UNSAFE LOG QUERY BLOCKED\n\n` +
+                    `Reason: ${safetyCheck.reason}\n\n` +
+                    `Suggestion: ${safetyCheck.suggestion}\n\n` +
+                    `This protection prevents session crashes from large responses.`,
+            },
+          ],
+          isError: true,
+        };
+      }
 
       const result = await advancedBlockchain.searchLogs(blockchain, filter, network);
 

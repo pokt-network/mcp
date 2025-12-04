@@ -1,6 +1,7 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { BlockchainRPCService } from '../services/blockchain-service.js';
+import { validateNaturalLanguageQuery, validateRPCCall } from '../utils/enhanced-safety-checks.js';
 
 /**
  * Register blockchain-related tools with the MCP server
@@ -123,6 +124,24 @@ export async function handleBlockchainTool(
   switch (name) {
     case 'query_blockchain': {
       const query = args?.query as string;
+      
+      // SAFETY CHECK: Validate query before execution
+      const safetyCheck = validateNaturalLanguageQuery(query);
+      if (!safetyCheck.safe) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `⛔ UNSAFE QUERY BLOCKED\n\n` +
+                    `Reason: ${safetyCheck.reason}\n\n` +
+                    `Suggestion: ${safetyCheck.suggestion}\n\n` +
+                    `This protection prevents session crashes from large responses.`,
+            },
+          ],
+          isError: true,
+        };
+      }
+      
       const result = await blockchainService.executeQuery(query);
 
       return {
@@ -185,6 +204,23 @@ export async function handleBlockchainTool(
       const method = args?.method as string;
       const params = (args?.params as any[]) || [];
       const network = (args?.network as 'mainnet' | 'testnet') || 'mainnet';
+
+      // SAFETY CHECK: Validate RPC call before execution
+      const safetyCheck = validateRPCCall(blockchain, method, params);
+      if (!safetyCheck.safe) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `⛔ UNSAFE RPC CALL BLOCKED\n\n` +
+                    `Reason: ${safetyCheck.reason}\n\n` +
+                    `Suggestion: ${safetyCheck.suggestion}\n\n` +
+                    `This protection prevents session crashes from large responses.`,
+            },
+          ],
+          isError: true,
+        };
+      }
 
       const service = blockchainService.getServiceByBlockchain(blockchain, network);
 

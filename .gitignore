@@ -7,3 +7,4 @@ dist/
 .env
 .env.local
 coverage/
+/test-mcp-minimal.js
