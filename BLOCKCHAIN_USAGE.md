@@ -2,6 +2,26 @@
 
 This guide shows how to use the blockchain-specific features of the MCP Pocket Network server.
 
+## ⚠️ Safety Features
+
+The MCP server includes built-in protection against queries that cause session crashes:
+
+**Protected Operations:**
+- ❌ Transaction history queries (e.g., "What was the last transaction on address X?")
+- ❌ Fetching blocks with full transactions (`includeTransactions: true`)
+- ❌ Unrestricted log queries without filters
+- ❌ Large block range queries (>10 blocks)
+
+**Why?** These operations return massive amounts of data that fill the context window and cause "no compactable messages" errors.
+
+**Safe Alternatives:**
+- ✅ Query specific transactions by hash (if you know it)
+- ✅ Use block explorers (Etherscan, etc.) for transaction history
+- ✅ Query current state (balances, gas prices, block metadata)
+- ✅ Fetch block metadata only (without transactions)
+
+All standard operations continue to work normally. See the [Safety Features](README.md#safety-features) section for more details.
+
 ## Natural Language Queries
 
 The most powerful feature is `query_blockchain`, which allows you to use natural language:
@@ -154,12 +174,12 @@ Returns an array of all RPC methods available for that blockchain.
 All EVM chains support these methods:
 
 - `eth_blockNumber` - Get latest block number
-- `eth_getBlockByNumber` - Get block by number
-- `eth_getBlockByHash` - Get block by hash
+- `eth_getBlockByNumber` - Get block by number (⚠️ use `false` for 2nd param to avoid crashes)
+- `eth_getBlockByHash` - Get block by hash (⚠️ use `false` for 2nd param to avoid crashes)
 - `eth_getBalance` - Get account balance
 - `eth_call` - Execute a read-only contract call
 - `eth_sendRawTransaction` - Send a signed transaction
-- `eth_getLogs` - Get event logs
+- `eth_getLogs` - Get event logs (⚠️ requires address/topic filters and block range limits)
 - `eth_getTransactionReceipt` - Get transaction receipt
 - `eth_getTransactionByHash` - Get transaction by hash
 - `eth_estimateGas` - Estimate gas for a transaction
@@ -184,12 +204,22 @@ All EVM chains support these methods:
   "params": []
 }
 
-// Get full block details
+// Get block metadata only (SAFE - recommended)
 {
   "blockchain": "ethereum",
   "method": "eth_getBlockByNumber",
-  "params": ["latest", true]  // true = include full transactions
+  "params": ["latest", false]  // false = metadata only, no transactions
 }
+
+// ⚠️ UNSAFE: Including full transactions will be blocked
+// This would crash sessions due to 100+ transactions per block
+// {
+//   "blockchain": "ethereum",
+//   "method": "eth_getBlockByNumber",
+//   "params": ["latest", true]  // ❌ Blocked by safety checks
+// }
+//
+// Instead: Query specific transactions by hash or use a block explorer
 ```
 
 ### 2. Check Account Balance
@@ -336,3 +366,107 @@ To add support for a new blockchain:
 3. **Check supported methods** first if you're unsure what's available
 4. **All responses include metadata** showing which endpoint was called
 5. **Testnet endpoints use the same methods** as mainnet
+
+## Unsafe Queries and Safe Alternatives
+
+### ❌ Unsafe: Transaction History Queries
+
+```
+"What was the last transaction on vitalik.eth?"
+"Show me recent transactions for address 0x..."
+"Get transaction history for my wallet"
+```
+
+**Why blocked?** Requires scanning multiple blocks with hundreds of transactions, causing context overflow.
+
+**✅ Safe Alternatives:**
+- Use block explorers: [Etherscan](https://etherscan.io), [Polygonscan](https://polygonscan.com), etc.
+- Query specific transaction by hash (if you know it)
+- Query current balance or state instead
+
+### ❌ Unsafe: Blocks with Full Transactions
+
+```javascript
+{
+  "blockchain": "ethereum",
+  "method": "eth_getBlockByNumber",
+  "params": ["latest", true]  // ❌ Blocked
+}
+```
+
+**Why blocked?** Each block contains 100+ transactions, creating massive responses.
+
+**✅ Safe Alternative:**
+```javascript
+// Get block metadata only
+{
+  "blockchain": "ethereum",
+  "method": "eth_getBlockByNumber",
+  "params": ["latest", false]  // ✅ Safe
+}
+
+// Then query specific transactions by hash if needed
+{
+  "blockchain": "ethereum",
+  "method": "eth_getTransactionByHash",
+  "params": ["0x..."]  // ✅ Safe
+}
+```
+
+### ❌ Unsafe: Unrestricted Log Queries
+
+```javascript
+{
+  "blockchain": "ethereum",
+  "method": "eth_getLogs",
+  "params": [{
+    "fromBlock": "0x0",
+    "toBlock": "latest"
+    // No address or topic filters - ❌ Blocked
+  }]
+}
+```
+
+**Why blocked?** Returns gigabytes of data across all contracts and events.
+
+**✅ Safe Alternative:**
+```javascript
+{
+  "blockchain": "ethereum",
+  "method": "eth_getLogs",
+  "params": [{
+    "fromBlock": "latest",
+    "toBlock": "latest",
+    "address": "0x...",  // ✅ Specific contract
+    "topics": ["0x..."]  // ✅ Specific event
+  }]
+}
+```
+
+### What If I Need Transaction History?
+
+For comprehensive transaction history, use:
+
+1. **Block Explorer APIs**:
+   - Etherscan API
+   - Polygonscan API  
+   - Arbiscan API
+   - Block explorer for your specific chain
+
+2. **Indexing Services**:
+   - The Graph
+   - Covalent
+   - Alchemy Enhanced APIs
+   - QuickNode NFT APIs
+
+3. **Current State Queries** (always safe):
+   ```javascript
+   // Get current balance
+   { "method": "eth_getBalance", "params": ["0x...", "latest"] }
+   
+   // Get transaction count (total ever sent)
+   { "method": "eth_getTransactionCount", "params": ["0x...", "latest"] }
+   
+   // Get current nonce
+   { "method": "eth_getTransactionCount", "params": ["0x...", "pending"] }
+   ```

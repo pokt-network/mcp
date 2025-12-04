@@ -10,6 +10,7 @@ Turn Claude into a blockchain analysis tool with natural language queries, token
 
 - [Quick Start](#quick-start)
 - [Features](#features)
+- [Safety Features](#safety-features)
 - [Detailed Installation](#detailed-installation)
 - [Available Tools](#available-tools)
   - [Core Blockchain Tools](#core-blockchain-tools-5-tools)
@@ -82,6 +83,7 @@ Prerequisites: Node.js 18+ and npm
 - **63 Networks**: Ethereum, Polygon, Arbitrum, Optimism, Base, Solana, NEAR, Sui, and more
 - **Natural Language Queries**: "get the latest height for ethereum" → direct results
 - **Live JSON-RPC**: Execute any blockchain RPC method directly
+- **Built-in Safety**: Automatic protection against context overflow from large responses
 
 ### Chain-Specific Features
 
@@ -112,6 +114,37 @@ Prerequisites: Node.js 18+ and npm
 - Staking: Delegations, validators, rewards
 - Governance: Proposals, votes
 - IBC Support: Cross-chain queries via REST API
+
+## Safety Features
+
+### Crash Prevention System
+Built-in safety checks prevent session crashes from large blockchain responses:
+
+**Protected Query Types:**
+- ⛔ **Transaction History Queries** - Blocks requests like "What was the last transaction on address X?" that require scanning multiple blocks
+- ⛔ **Blocks with Full Transactions** - Prevents fetching blocks with 100+ transactions that fill the context window
+- ⛔ **Unrestricted Log Queries** - Requires address/topic filters and block range limits
+- ⛔ **Debug/Trace Methods** - Blocks extremely large response methods like `debug_traceTransaction`
+
+**How It Works:**
+- Validates queries **before** execution to prevent context overflow
+- Returns helpful error messages with safe alternatives
+- Keeps sessions alive and functional
+- No impact on safe queries
+
+**Safe Alternatives Provided:**
+When a dangerous query is blocked, you receive:
+- Block explorer links (Etherscan, etc.) for transaction history
+- Suggestions for safe RPC alternatives
+- Guidance on querying current state instead of history
+
+**Example:**
+```
+Query: "What was the last transaction on vitalik.eth?"
+Result: ⛔ Blocked with guidance to use Etherscan or query current balance instead
+```
+
+All standard blockchain operations (balances, specific transactions, gas prices, block metadata) continue to work normally.
 
 ## Detailed Installation
 
@@ -301,9 +334,9 @@ src/
 │   ├── blockchain-services.json        # Blockchain network configurations (63 networks)
 │   └── endpoints.json                  # HTTP endpoint configurations
 ├── handlers/                            # Tool handlers organized by feature
-│   ├── blockchain-handlers.ts          # Core blockchain tools
+│   ├── blockchain-handlers.ts          # Core blockchain tools (with safety checks)
 │   ├── domain-handlers.ts              # ENS & domain resolution
-│   ├── transaction-handlers.ts         # Transaction & block tools
+│   ├── transaction-handlers.ts         # Transaction & block tools (with safety checks)
 │   ├── token-handlers.ts               # ERC-20 token tools
 │   ├── multichain-handlers.ts          # Multi-chain comparison
 │   ├── contract-handlers.ts            # Smart contract interactions
@@ -313,15 +346,17 @@ src/
 │   ├── cosmos-handlers.ts              # Cosmos SDK tools
 │   ├── sui-handlers.ts                 # Sui blockchain tools
 │   └── docs-handlers.ts                # Documentation tools
-└── services/
-    ├── blockchain-service.ts           # Core RPC calls & natural language queries
-    ├── advanced-blockchain-service.ts  # EVM: Transactions, tokens, blocks, utilities
-    ├── solana-service.ts               # Solana: SPL tokens, accounts, transactions, fees
-    ├── sui-service.ts                  # Sui: balances, coins, objects, transactions, checkpoints
-    ├── cosmos-service.ts               # Cosmos SDK: Staking, governance, IBC
-    ├── domain-resolver.ts              # ENS & Unstoppable Domains resolution
-    ├── endpoint-manager.ts             # Generic HTTP endpoint manager
-    └── docs-manager.ts                 # Documentation retrieval
+├── services/
+│   ├── blockchain-service.ts           # Core RPC calls & natural language queries
+│   ├── advanced-blockchain-service.ts  # EVM: Transactions, tokens, blocks, utilities
+│   ├── solana-service.ts               # Solana: SPL tokens, accounts, transactions, fees
+│   ├── sui-service.ts                  # Sui: balances, coins, objects, transactions, checkpoints
+│   ├── cosmos-service.ts               # Cosmos SDK: Staking, governance, IBC
+│   ├── domain-resolver.ts              # ENS & Unstoppable Domains resolution
+│   ├── endpoint-manager.ts             # Generic HTTP endpoint manager
+│   └── docs-manager.ts                 # Documentation retrieval
+└── utils/
+    └── enhanced-safety-checks.ts       # Safety validation (prevents context overflow)
 ```
 
 ## Development
